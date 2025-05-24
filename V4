@@ -1,0 +1,317 @@
+-- ModernUI Library v1.0
+-- Author: ChatGPT x User
+-- Date: 2025-05-24
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local ModernUI = {}
+ModernUI.__index = ModernUI
+
+-- Services
+local function create(instance, props)
+	local obj = Instance.new(instance)
+	for i, v in pairs(props) do
+		obj[i] = v
+	end
+	return obj
+end
+
+-- Animate
+local function animate(obj, props, time, style, dir)
+	TweenService:Create(obj, TweenInfo.new(time or 0.25, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
+end
+
+-- Dragify
+local function makeDraggable(frame)
+	local dragging = false
+	local dragInput, mousePos, framePos
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			mousePos = input.Position
+			framePos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - mousePos
+			frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+-- Create Menu
+function ModernUI:AddMenu(title)
+	local ScreenGui = create("ScreenGui", {
+		Name = "ModernUILib",
+		ResetOnSpawn = false,
+		Parent = game.CoreGui
+	})
+
+	local Main = create("Frame", {
+		Size = UDim2.new(0, 500, 0, 400),
+		Position = UDim2.new(0.3, 0, 0.3, 0),
+		BackgroundColor3 = Color3.fromRGB(25, 25, 25),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Name = "Main",
+		Parent = ScreenGui
+	})
+
+	local UICorner = create("UICorner", {
+		CornerRadius = UDim.new(0, 12),
+		Parent = Main
+	})
+
+	local UIStroke = create("UIStroke", {
+		Color = Color3.fromRGB(65, 65, 65),
+		Thickness = 1.5,
+		Parent = Main
+	})
+
+	makeDraggable(Main)
+
+	local Tabs = create("Frame", {
+		Name = "Tabs",
+		Size = UDim2.new(0, 140, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel = 0,
+		Parent = Main
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = Tabs})
+
+	local TabContainer = create("Frame", {
+		Name = "TabContainer",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Parent = Tabs
+	})
+
+	local TabList = create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 4),
+		Parent = TabContainer
+	})
+
+	local Content = create("Frame", {
+		Name = "Content",
+		Size = UDim2.new(1, -140, 1, 0),
+		Position = UDim2.new(0, 140, 0, 0),
+		BackgroundTransparency = 1,
+		Parent = Main
+	})
+
+	return setmetatable({
+		Main = Main,
+		Tabs = Tabs,
+		TabContainer = TabContainer,
+		Content = Content,
+		TabPages = {}
+	}, ModernUI)
+end
+
+-- Add Tab
+function ModernUI:AddTab(name)
+	local button = create("TextButton", {
+		Text = name,
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		Parent = self.TabContainer
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = button})
+
+	local page = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		CanvasSize = UDim2.new(0, 0, 5, 0),
+		ScrollBarThickness = 4,
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = self.Content
+	})
+
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+		Parent = page
+	})
+
+	button.MouseButton1Click:Connect(function()
+		for _, p in pairs(self.Content:GetChildren()) do
+			if p:IsA("Frame") or p:IsA("ScrollingFrame") then
+				p.Visible = false
+			end
+		end
+		page.Visible = true
+	end)
+
+	self.TabPages[name] = page
+	return page
+end
+
+-- Add Chapter
+function ModernUI:AddChapter(tab, name)
+	local container = create("Frame", {
+		Size = UDim2.new(1, -20, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+		Parent = tab
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = container})
+
+	create("TextLabel", {
+		Text = name,
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		Parent = container
+	})
+
+	return container
+end
+
+-- Add Button
+function ModernUI:AddButton(parent, name, callback)
+	local btn = create("TextButton", {
+		Text = name,
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, -20, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+		Parent = parent
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = btn})
+	btn.MouseButton1Click:Connect(function()
+		pcall(callback)
+	end)
+end
+
+-- Add Toggle
+function ModernUI:AddToggle(parent, name, default, callback)
+	local toggle = false
+	local holder = create("Frame", {
+		Size = UDim2.new(1, -20, 0, 30),
+		BackgroundTransparency = 1,
+		Parent = parent
+	})
+
+	local label = create("TextLabel", {
+		Text = name,
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(0.8, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Parent = holder
+	})
+
+	local switch = create("TextButton", {
+		Size = UDim2.new(0.2, -10, 0.7, 0),
+		Position = UDim2.new(0.8, 10, 0.15, 0),
+		BackgroundColor3 = Color3.fromRGB(70, 70, 70),
+		Text = "",
+		Parent = holder
+	})
+	create("UICorner", {Parent = switch})
+
+	switch.MouseButton1Click:Connect(function()
+		toggle = not toggle
+		switch.BackgroundColor3 = toggle and Color3.fromRGB(0, 170, 127) or Color3.fromRGB(70, 70, 70)
+		pcall(callback, toggle)
+	end)
+
+	return toggle
+end
+
+-- Add TextInput
+function ModernUI:AddTextInput(parent, placeholder, callback)
+	local box = create("TextBox", {
+		PlaceholderText = placeholder,
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, -20, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		Parent = parent
+	})
+	create("UICorner", {Parent = box})
+
+	box.FocusLost:Connect(function()
+		pcall(callback, box.Text)
+	end)
+end
+
+-- Add Slider
+function ModernUI:AddSlider(parent, name, min, max, callback)
+	local frame = create("Frame", {
+		Size = UDim2.new(1, -20, 0, 40),
+		BackgroundTransparency = 1,
+		Parent = parent
+	})
+
+	local label = create("TextLabel", {
+		Text = name,
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, 0, 0.4, 0),
+		BackgroundTransparency = 1,
+		Parent = frame
+	})
+
+	local sliderBar = create("Frame", {
+		Size = UDim2.new(1, 0, 0.3, 0),
+		Position = UDim2.new(0, 0, 0.6, 0),
+		BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+		Parent = frame
+	})
+	create("UICorner", {Parent = sliderBar})
+
+	local slider = create("Frame", {
+		Size = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(0, 170, 127),
+		Parent = sliderBar
+	})
+	create("UICorner", {Parent = slider})
+
+	local dragging = false
+	sliderBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+	sliderBar.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local pos = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+			slider.Size = UDim2.new(pos, 0, 1, 0)
+			local value = math.floor(min + (max - min) * pos)
+			pcall(callback, value)
+		end
+	end)
+end
+
+return ModernUI

@@ -1,0 +1,335 @@
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local ModernUI = {}
+ModernUI.__index = ModernUI
+
+-- Helper to create instances
+local function create(className, props)
+	local inst = Instance.new(className)
+	for prop, value in pairs(props) do
+		inst[prop] = value
+	end
+	return inst
+end
+
+-- Tweening helper
+local function tween(object, props, time, style, dir)
+	TweenService:Create(object, TweenInfo.new(time or 0.3, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
+end
+
+-- Make any frame draggable
+local function makeDraggable(frame)
+	local dragging, dragInput, startPos, startMousePos
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startMousePos = input.Position
+			startPos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - startMousePos
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+function ModernUI.new()
+	local self = setmetatable({}, ModernUI)
+
+	self.Gui = create("ScreenGui", {
+		Name = "ModernUI",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+	})
+
+	self.Main = create("Frame", {
+		Size = UDim2.new(0, 550, 0, 400),
+		Position = UDim2.new(0.5, -275, 0.5, -200),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Parent = self.Gui
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = self.Main})
+	makeDraggable(self.Main)
+
+	self.Sidebar = create("Frame", {
+		Size = UDim2.new(0, 150, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+		BorderSizePixel = 0,
+		Parent = self.Main
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = self.Sidebar})
+
+	self.TabButtons = create("Frame", {
+		Size = UDim2.new(1, 0, 1, -10),
+		Position = UDim2.new(0, 0, 0, 10),
+		BackgroundTransparency = 1,
+		Parent = self.Sidebar
+	})
+
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 5),
+		Parent = self.TabButtons
+	})
+
+	self.Content = create("Frame", {
+		Size = UDim2.new(1, -160, 1, -20),
+		Position = UDim2.new(0, 160, 0, 10),
+		BackgroundTransparency = 1,
+		Parent = self.Main
+	})
+
+	self.Tabs = {}
+	self.Theme = {
+		Primary = Color3.fromRGB(60, 60, 60),
+		Secondary = Color3.fromRGB(45, 45, 45),
+		Accent = Color3.fromRGB(0, 170, 127),
+		Font = Enum.Font.Gotham
+	}
+
+	return self
+end
+
+function ModernUI:SetTheme(options)
+	for key, value in pairs(options) do
+		if self.Theme[key] then
+			self.Theme[key] = value
+		end
+	end
+end
+
+function ModernUI:AddTab(tabName)
+	local tab = create("Frame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = self.Content
+	})
+
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+		Parent = tab
+	})
+
+	local btn = create("TextButton", {
+		Text = tabName,
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = self.TabButtons
+	})
+
+	create("UICorner", {Parent = btn})
+
+	btn.MouseButton1Click:Connect(function()
+		for _, t in pairs(self.Tabs) do
+			t.Visible = false
+		end
+		tab.Visible = true
+	end)
+
+	table.insert(self.Tabs, tab)
+	self.Tabs[tabName] = tab
+	return tab
+end
+
+function ModernUI:AddSection(tab, title)
+	local section = create("Frame", {
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundTransparency = 1,
+		Parent = tab
+	})
+
+	create("TextLabel", {
+		Text = title,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = section
+	})
+
+	return section
+end
+
+function ModernUI:AddButton(parent, text, callback)
+	local button = create("TextButton", {
+		Text = text,
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = parent
+	})
+
+	create("UICorner", {Parent = button})
+
+	button.MouseButton1Click:Connect(callback)
+	return button
+end
+
+function ModernUI:AddToggle(parent, text, callback)
+	local toggle = false
+	local button = create("TextButton", {
+		Text = text .. ": OFF",
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = parent
+	})
+
+	create("UICorner", {Parent = button})
+
+	button.MouseButton1Click:Connect(function()
+		toggle = not toggle
+		button.Text = text .. ": " .. (toggle and "ON" or "OFF")
+		callback(toggle)
+	end)
+
+	return button
+end
+
+function ModernUI:AddTextInput(parent, placeholder, callback)
+	local box = create("TextBox", {
+		PlaceholderText = placeholder,
+		Text = "",
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		ClearTextOnFocus = false,
+		Parent = parent
+	})
+
+	create("UICorner", {Parent = box})
+
+	box.FocusLost:Connect(function()
+		callback(box.Text)
+	end)
+
+	return box
+end
+
+function ModernUI:AddSlider(parent, min, max, default, callback)
+	local frame = create("Frame", {
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundTransparency = 1,
+		Parent = parent
+	})
+
+	local bar = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		BackgroundColor3 = self.Theme.Secondary,
+		BorderSizePixel = 0,
+		Parent = frame
+	})
+
+	local fill = create("Frame", {
+		Size = UDim2.new((default - min)/(max - min), 0, 1, 0),
+		BackgroundColor3 = self.Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = bar
+	})
+
+	local dragging = false
+
+	bar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+			rel = math.clamp(rel, 0, 1)
+			fill.Size = UDim2.new(rel, 0, 1, 0)
+			callback(math.floor(min + (max - min) * rel))
+		end
+	end)
+
+	return frame
+end
+
+function ModernUI:AddDropdown(parent, options, callback)
+	local dropdown = create("TextButton", {
+		Text = "Select...",
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = parent
+	})
+
+	create("UICorner", {Parent = dropdown})
+
+	dropdown.MouseButton1Click:Connect(function()
+		for _, opt in ipairs(options) do
+			print("Selected: " .. opt)
+			callback(opt)
+		end
+	end)
+
+	return dropdown
+end
+
+function ModernUI:AddKeybind(parent, key, callback)
+	local label = create("TextLabel", {
+		Text = "Press " .. key,
+		Size = UDim2.new(1, -10, 0, 30),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = parent
+	})
+
+	UserInputService.InputBegan:Connect(function(input, gpe)
+		if not gpe and input.KeyCode == Enum.KeyCode[key] then
+			callback()
+		end
+	end)
+
+	return label
+end
+
+return ModernUI

@@ -1,0 +1,716 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local ModernUI = {}
+ModernUI.__index = ModernUI
+
+-- Helper to create instances
+local function create(className, props)
+	local inst = Instance.new(className)
+	for prop, value in pairs(props) do
+		inst[prop] = value
+	end
+	return inst
+end
+
+-- Advanced tweening helper with custom easing
+local function tween(object, props, time, style, dir, delay)
+	local tweenInfo = TweenInfo.new(
+		time or 0.3,
+		style or Enum.EasingStyle.Sine,
+		dir or Enum.EasingDirection.Out,
+		0,
+		false,
+		delay or 0
+	)
+	local tween = TweenService:Create(object, tweenInfo, props)
+	tween:Play()
+	return tween
+end
+
+-- Make any frame draggable
+local function makeDraggable(frame)
+	local dragging, dragInput, startPos, startMousePos
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startMousePos = input.Position
+			startPos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - startMousePos
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+function ModernUI.new()
+	local self = setmetatable({}, ModernUI)
+
+	self.Gui = create("ScreenGui", {
+		Name = "ModernUI",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+	})
+
+	self.Main = create("Frame", {
+		Size = UDim2.new(0, 600, 0, 450),
+		Position = UDim2.new(0.5, -300, 0.5, -225),
+		BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Parent = self.Gui
+	})
+
+	-- Add shadow effect
+	create("UIStroke", {
+		Thickness = 2,
+		Color = Color3.fromRGB(0, 0, 0),
+		Transparency = 0.8,
+		Parent = self.Main
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = self.Main})
+	makeDraggable(self.Main)
+
+	-- Close button
+	local closeButton = create("TextButton", {
+		Size = UDim2.new(0, 30, 0, 30),
+		Position = UDim2.new(1, -40, 0, 10),
+		BackgroundColor3 = Color3.fromRGB(200, 50, 50),
+		Text = "X",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Parent = self.Main
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = closeButton})
+
+	closeButton.MouseButton1Click:Connect(function()
+		self:Close()
+	end)
+	closeButton.MouseEnter:Connect(function()
+		tween(closeButton, {BackgroundColor3 = Color3.fromRGB(255, 80, 80)}, 0.2)
+	end)
+	closeButton.MouseLeave:Connect(function()
+		tween(closeButton, {BackgroundColor3 = Color3.fromRGB(200, 50, 50)}, 0.2)
+	end)
+
+	self.Sidebar = create("Frame", {
+		Size = UDim2.new(0, 180, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+		BorderSizePixel = 0,
+		Parent = self.Main
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = self.Sidebar})
+
+	self.TabButtons = create("Frame", {
+		Size = UDim2.new(1, 0, 1, -50),
+		Position = UDim2.new(0, 0, 0, 50),
+		BackgroundTransparency = 1,
+		Parent = self.Sidebar
+	})
+
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+		Parent = self.TabButtons
+	})
+
+	self.Content = create("Frame", {
+		Size = UDim2.new(1, -190, 1, -20),
+		Position = UDim2.new(0, 190, 0, 10),
+		BackgroundTransparency = 1,
+		Parent = self.Main
+	})
+
+	self.Tabs = {}
+	self.Notifications = {}
+	self.Theme = {
+		Primary = Color3.fromRGB(50, 50, 50),
+		Secondary = Color3.fromRGB(40, 40, 40),
+		Accent = Color3.fromRGB(0, 170, 127),
+		Font = Enum.Font.Gotham,
+		Text = Color3.new(1, 1, 1)
+	}
+
+	-- Initial animation
+	self.Main.Size = UDim2.new(0, 0, 0, 0)
+	tween(self.Main, {Size = UDim2.new(0, 600, 0, 450)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	return self
+end
+
+function ModernUI:SetTheme(options)
+	local oldTheme = table.clone(self.Theme)
+	for key, value in pairs(options) do
+		if self.Theme[key] then
+			self.Theme[key] = value
+		end
+	end
+
+	-- Animate theme change
+	local function updateColors(instance)
+		if instance:IsA("Frame") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+			if instance.BackgroundColor3 == oldTheme.Primary then
+				tween(instance, {BackgroundColor3 = self.Theme.Primary}, 0.3)
+			elseif instance.BackgroundColor3 == oldTheme.Secondary then
+				tween(instance, {BackgroundColor3 = self.Theme.Secondary}, 0.3)
+			elseif instance.BackgroundColor3 == oldTheme.Accent then
+				tween(instance, {BackgroundColor3 = self.Theme.Accent}, 0.3)
+			end
+		end
+		if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+			if instance.TextColor3 == oldTheme.Text then
+				tween(instance, {TextColor3 = self.Theme.Text}, 0.3)
+			end
+		end
+		for _, child in pairs(instance:GetChildren()) do
+			updateColors(child)
+		end
+	end
+	updateColors(self.Gui)
+end
+
+function ModernUI:AddTab(tabName)
+	local tab = create("Frame", {
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = self.Content
+	})
+
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+		Parent = tab
+	})
+
+	local btn = create("TextButton", {
+		Text = tabName,
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = self.TabButtons
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = btn})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = btn
+	})
+
+	btn.MouseButton1Click:Connect(function()
+		for _, t in pairs(self.Tabs) do
+			t.Visible = false
+		end
+		tab.Visible = true
+		tween(btn, {BackgroundColor3 = self.Theme.Accent}, 0.2)
+		for _, otherBtn in pairs(self.TabButtons:GetChildren()) do
+			if otherBtn:IsA("TextButton") and otherBtn ~= btn then
+				tween(otherBtn, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+			end
+		end
+	end)
+
+	btn.MouseEnter:Connect(function()
+		tween(btn.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	btn.MouseLeave:Connect(function()
+		if not tab.Visible then
+			tween(btn.UIStroke, {Transparency = 1}, 0.2)
+		end
+	end)
+
+	table.insert(self.Tabs, tab)
+	self.Tabs[tabName] = tab
+	return tab
+end
+
+function ModernUI:AddSection(tab, title)
+	local section = create("Frame", {
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundTransparency = 1,
+		Parent = tab
+	})
+
+	create("TextLabel", {
+		Text = title,
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = section
+	})
+
+	create("Frame", {
+		Size = UDim2.new(1, 0, 0, 2),
+		Position = UDim2.new(0, 0, 1, -2),
+		BackgroundColor3 = self.Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = section
+	})
+
+	return section
+end
+
+function ModernUI:AddButton(parent, text, callback)
+	local button = create("TextButton", {
+		Text = text,
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = parent
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = button})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = button
+	})
+
+	button.MouseButton1Click:Connect(function()
+		tween(button, {BackgroundColor3 = self.Theme.Accent}, 0.1)
+		tween(button, {BackgroundColor3 = self.Theme.Primary}, 0.1, nil, nil, 0.1)
+		callback()
+	end)
+
+	button.MouseEnter:Connect(function()
+		tween(button, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		tween(button.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	button.MouseLeave:Connect(function()
+		tween(button, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		tween(button.UIStroke, {Transparency = 1}, 0.2)
+	end)
+
+	return button
+end
+
+function ModernUI:AddToggle(parent, text, callback)
+	local toggle = false
+	local button = create("TextButton", {
+		Text = text .. ": OFF",
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = parent
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = button})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = button
+	})
+
+	local indicator = create("Frame", {
+		Size = UDim2.new(0, 20, 0, 20),
+		Position = UDim2.new(1, -30, 0.5, -10),
+		BackgroundColor3 = Color3.fromRGB(100, 100, 100),
+		Parent = button
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = indicator})
+
+	button.MouseButton1Click:Connect(function()
+		toggle = not toggle
+		button.Text = text .. ": " .. (toggle and "ON" or "OFF")
+		tween(indicator, {BackgroundColor3 = toggle and self.Theme.Accent or Color3.fromRGB(100, 100, 100)}, 0.2)
+		callback(toggle)
+	end)
+
+	button.MouseEnter:Connect(function()
+		tween(button, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		tween(button.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	button.MouseLeave:Connect(function()
+		tween(button, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		tween(button.UIStroke, {Transparency = 1}, 0.2)
+	end)
+
+	return button
+end
+
+function ModernUI:AddTextInput(parent, placeholder, callback)
+	local box = create("TextBox", {
+		PlaceholderText = placeholder,
+		Text = "",
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		ClearTextOnFocus = false,
+		Parent = parent
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = box})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = box
+	})
+
+	box.Focused:Connect(function()
+		tween(box, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		tween(box.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	box.FocusLost:Connect(function()
+		tween(box, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		tween(box.UIStroke, {Transparency = 1}, 0.2)
+		callback(box.Text)
+	end)
+
+	return box
+end
+
+function ModernUI:AddSlider(parent, min, max, default, callback)
+	local frame = create("Frame", {
+		Size = UDim2.new(1, -10, 0, 60),
+		BackgroundTransparency = 1,
+		Parent = parent
+	})
+
+	local label = create("TextLabel", {
+		Text = tostring(default),
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 14,
+		Parent = frame
+	})
+
+	local bar = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 8),
+		Position = UDim2.new(0, 0, 0, 30),
+		BackgroundColor3 = self.Theme.Secondary,
+		BorderSizePixel = 0,
+		Parent = frame
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 4), Parent = bar})
+
+	local fill = create("Frame", {
+		Size = UDim2.new((default - min)/(max - min), 0, 1, 0),
+		BackgroundColor3 = self.Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = bar
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 4), Parent = fill})
+
+	local knob = create("Frame", {
+		Size = UDim2.new(0, 16, 0, 16),
+		Position = UDim2.new((default - min)/(max - min), -8, 0, -4),
+		BackgroundColor3 = self.Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = bar
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = knob})
+
+	local dragging = false
+
+	bar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+			rel = math.clamp(rel, 0, 1)
+			local value = math.floor(min + (max - min) * rel)
+			fill.Size = UDim2.new(rel, 0, 1, 0)
+			knob.Position = UDim2.new(rel, -8, 0, -4)
+			label.Text = tostring(value)
+			callback(value)
+		end
+	end)
+
+	return frame
+end
+
+function ModernUI:AddDropdown(parent, options, callback)
+	local open = false
+	local dropdown = create("TextButton", {
+		Text = "Select...",
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = parent
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = dropdown})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = dropdown
+	})
+
+	local menu = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.new(0, 0, 1, 5),
+		BackgroundColor3 = self.Theme.Primary,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Visible = false,
+		Parent = dropdown
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = menu})
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 2),
+		Parent = menu
+	})
+
+	for i, opt in ipairs(options) do
+		local optBtn = create("TextButton", {
+			Text = opt,
+			Size = UDim2.new(1, 0, 0, 30),
+			BackgroundColor3 = self.Theme.Primary,
+			Font = self.Theme.Font,
+			TextColor3 = self.Theme.Text,
+			TextSize = 14,
+			Parent = menu
+		})
+
+		optBtn.MouseButton1Click:Connect(function()
+			dropdown.Text = opt
+			tween(menu, {Size = UDim2.new(1, 0, 0, 0)}, 0.2)
+			menu.Visible = false
+			open = false
+			callback(opt)
+		end)
+
+		optBtn.MouseEnter:Connect(function()
+			tween(optBtn, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		end)
+		optBtn.MouseLeave:Connect(function()
+			tween(optBtn, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		end)
+	end
+
+	dropdown.MouseButton1Click:Connect(function()
+		open = not open
+		menu.Visible = open
+		tween(menu, {Size = UDim2.new(1, 0, 0, open and #options * 32 or 0)}, 0.3, Enum.EasingStyle.Quart)
+	end)
+
+	dropdown.MouseEnter:Connect(function()
+		tween(dropdown, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		tween(dropdown.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	dropdown.MouseLeave:Connect(function()
+		tween(dropdown, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		tween(dropdown.UIStroke, {Transparency = 1}, 0.2)
+	end)
+
+	return dropdown
+end
+
+function ModernUI:AddKeybind(parent, key, callback)
+	local label = create("TextButton", {
+		Text = "Press " .. key,
+		Size = UDim2.new(1, -10, 0, 40),
+		BackgroundColor3 = self.Theme.Primary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = parent
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = label})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Transparency = 1,
+		Parent = label
+	})
+
+	local waitingForInput = false
+	label.MouseButton1Click:Connect(function()
+		waitingForInput = true
+		label.Text = "Press any key..."
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, gpe)
+		if waitingForInput and not gpe and input.KeyCode ~= Enum.KeyCode.Unknown then
+			waitingForInput = false
+			label.Text = "Press " .. input.KeyCode.Name
+			key = input.KeyCode.Name
+		end
+		if not gpe and input.KeyCode == Enum.KeyCode[key] then
+			tween(label, {BackgroundColor3 = self.Theme.Accent}, 0.1)
+			tween(label, {BackgroundColor3 = self.Theme.Primary}, 0.1, nil, nil, 0.1)
+			callback()
+		end
+	end)
+
+	label.MouseEnter:Connect(function()
+		tween(label, {BackgroundColor3 = self.Theme.Secondary}, 0.2)
+		tween(label.UIStroke, {Transparency = 0}, 0.2)
+	end)
+	label.MouseLeave:Connect(function()
+		tween(label, {BackgroundColor3 = self.Theme.Primary}, 0.2)
+		tween(label.UIStroke, {Transparency = 1}, 0.2)
+	end)
+
+	return label
+end
+
+function ModernUI:AddNotification(text, duration)
+	local notification = create("Frame", {
+		Size = UDim2.new(0, 250, 0, 60),
+		Position = UDim2.new(1, -260, 1, -70),
+		BackgroundColor3 = self.Theme.Primary,
+		Parent = self.Gui
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = notification})
+	create("UIStroke", {
+		Thickness = 1,
+		Color = self.Theme.Accent,
+		Parent = notification
+	})
+
+	create("TextLabel", {
+		Text = text,
+		Size = UDim2.new(1, -10, 1, -10),
+		Position = UDim2.new(0, 5, 0, 5),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 14,
+		TextWrapped = true,
+		Parent = notification
+	})
+
+	notification.Position = UDim2.new(1, 0, 1, -70)
+	tween(notification, {Position = UDim2.new(1, -260, 1, -70)}, 0.3, Enum.EasingStyle.Back)
+	task.delay(duration or 3, function()
+		tween(notification, {Position = UDim2.new(1, 0, 1, -70)}, 0.3, Enum.EasingStyle.Back, nil, 0.2)
+		task.wait(0.5)
+		notification:Destroy()
+	end)
+
+	table.insert(self.Notifications, notification)
+	return notification
+end
+
+function ModernUI:Close()
+	tween(self.Main, {Size = UDim2.new(0, 0, 0, 0)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	task.wait(0.5)
+	self.Gui:Destroy()
+end
+
+function ModernUI:AddModal(title, content)
+	local modal = create("Frame", {
+		Size = UDim2.new(0, 400, 0, 300),
+		Position = UDim2.new(0.5, -200, 0.5, -150),
+		BackgroundColor3 = self.Theme.Primary,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Parent = self.Gui
+	})
+
+	create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = modal})
+	create("UIStroke", {
+		Thickness = 2,
+		Color = self.Theme.Accent,
+		Transparency = 0.5,
+		Parent = modal
+	})
+
+	local titleLabel = create("TextLabel", {
+		Text = title,
+		Size = UDim2.new(1, -20, 0, 40),
+		Position = UDim2.new(0, 10, 0, 10),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 18,
+		Parent = modal
+	})
+
+	local contentFrame = create("Frame", {
+		Size = UDim2.new(1, -20, 1, -60),
+		Position = UDim2.new(0, 10, 0, 50),
+		BackgroundTransparency = 1,
+		Parent = modal
+	})
+
+	create("TextLabel", {
+		Text = content,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 14,
+		TextWrapped = true,
+		Parent = contentFrame
+	})
+
+	local closeButton = create("TextButton", {
+		Text = "Close",
+		Size = UDim2.new(0, 80, 0, 30),
+		Position = UDim2.new(1, -90, 1, -40),
+		BackgroundColor3 = self.Theme.Secondary,
+		Font = self.Theme.Font,
+		TextColor3 = self.Theme.Text,
+		TextSize = 14,
+		Parent = modal
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = closeButton})
+
+	closeButton.MouseButton1Click:Connect(function()
+		tween(modal, {Size = UDim2.new(0, 0, 0, 0)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		task.wait(0.3)
+		modal:Destroy()
+	end)
+
+	modal.Size = UDim2.new(0, 0, 0, 0)
+	tween(modal, {Size = UDim2.new(0, 400, 0, 300)}, 0.3, Enum.EasingStyle.Back)
+
+	return modal
+end
+
+return ModernUI

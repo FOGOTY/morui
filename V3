@@ -1,0 +1,425 @@
+local CoolUI = {}
+CoolUI.__index = CoolUI
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Helper function to create tweens
+local function createTween(instance, properties, duration, easingStyle, easingDirection)
+    local tweenInfo = TweenInfo.new(duration, easingStyle or Enum.EasingStyle.Quad, easingDirection or Enum.EasingDirection.Out)
+    local tween = TweenService:Create(instance, tweenInfo, properties)
+    return tween
+end
+
+-- Initialize the UI library
+function CoolUI.new(title, position, size)
+    local self = setmetatable({}, CoolUI)
+    
+    -- Create ScreenGui
+    self.ScreenGui = Instance.new("ScreenGui")
+    self.ScreenGui.Name = "CoolUI"
+    self.ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    self.ScreenGui.ResetOnSpawn = false
+    
+    -- Main Frame
+    self.MainFrame = Instance.new("Frame")
+    self.MainFrame.Size = size or UDim2.new(0, 400, 0, 300)
+    self.MainFrame.Position = position or UDim2.new(0.5, -200, 0.5, -150)
+    self.MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    self.MainFrame.BorderSizePixel = 0
+    self.MainFrame.ClipsDescendants = true
+    self.MainFrame.Parent = self.ScreenGui
+    
+    -- Add corner radius
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = self.MainFrame
+    
+    -- Title Bar
+    self.TitleBar = Instance.new("Frame")
+    self.TitleBar.Size = UDim2.new(1, 0, 0, 30)
+    self.TitleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    self.TitleBar.BorderSizePixel = 0
+    self.TitleBar.Parent = self.MainFrame
+    
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size = UDim2.new(1, -10, 1, 0)
+    TitleLabel.Position = UDim2.new(0, 5, 0, 0)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = title or "Cool UI"
+    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLabel.TextSize = 16
+    TitleLabel.Font = Enum.Font.SourceSansBold
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = self.TitleBar
+    
+    -- Tab Container
+    self.TabContainer = Instance.new("Frame")
+    self.TabContainer.Size = UDim2.new(0, 100, 1, -30)
+    self.TabContainer.Position = UDim2.new(0, 0, 0, 30)
+    self.TabContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    self.TabContainer.BorderSizePixel = 0
+    self.TabContainer.Parent = self.MainFrame
+    
+    -- Content Area
+    self.ContentArea = Instance.new("Frame")
+    self.ContentArea.Size = UDim2.new(1, -100, 1, -30)
+    self.ContentArea.Position = UDim2.new(0, 100, 0, 30)
+    self.ContentArea.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    self.ContentArea.BorderSizePixel = 0
+    self.ContentArea.ClipsDescendants = true
+    self.ContentArea.Parent = self.MainFrame
+    
+    -- Tab and Chapter storage
+    self.Tabs = {}
+    self.Chapters = {}
+    self.ActiveTab = nil
+    
+    -- Dragging functionality
+    self:EnableDragging()
+    
+    -- Fade-in animation
+    self.MainFrame.BackgroundTransparency = 1
+    local fadeIn = createTween(self.MainFrame, {BackgroundTransparency = 0}, 0.5)
+    fadeIn:Play()
+    
+    return self
+end
+
+-- Enable dragging for the main frame
+function CoolUI:EnableDragging()
+    local dragging, dragInput, dragStart, startPos
+    
+    local function updateInput(input)
+        local delta = input.Position - dragStart
+        self.MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    self.TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.MainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    self.TitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            updateInput(input)
+        end
+    end)
+end
+
+-- Add a new tab
+function CoolUI:AddTab(name)
+    local tabButton = Instance.new("TextButton")
+    tabButton.Size = UDim2.new(1, 0, 0, 40)
+    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 40)
+    tabButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    tabButton.BorderSizePixel = 0
+    tabButton.Text = name
+    tabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+    tabButton.TextSize = 14
+    tabButton.Font = Enum.Font.SourceSans
+    tabButton.Parent = self.TabContainer
+    
+    local tabContent = Instance.new("Frame")
+    tabContent.Size = UDim2.new(1, 0, 1, 0)
+    tabContent.BackgroundTransparency = 1
+    tabContent.Visible = false
+    tabContent.Parent = self.ContentArea
+    
+    local chapterList = Instance.new("ScrollingFrame")
+    chapterList.Size = UDim2.new(1, 0, 1, 0)
+    chapterList.BackgroundTransparency = 1
+    chapterList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    chapterList.ScrollBarThickness = 4
+    chapterList.Parent = tabContent
+    
+    local uiListLayout = Instance.new("UIListLayout")
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    uiListLayout.Padding = UDim.new(0, 5)
+    uiListLayout.Parent = chapterList
+    
+    self.Tabs[name] = {Button = tabButton, Content = tabContent, Chapters = {}}
+    
+    -- Tab click animation and switching
+    tabButton.MouseButton1Click:Connect(function()
+        if self.ActiveTab ~= name then
+            if self.ActiveTab then
+                self.Tabs[self.ActiveTab].Content.Visible = false
+                createTween(self.Tabs[self.ActiveTab].Button, {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}, 0.3):Play()
+            end
+            self.ActiveTab = name
+            self.Tabs[name].Content.Visible = true
+            createTween(tabButton, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}, 0.3):Play()
+        end
+    end)
+    
+    -- Hover animation
+    tabButton.MouseEnter:Connect(function()
+        if self.ActiveTab ~= name then
+            createTween(tabButton, {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}, 0.2):Play()
+        end
+    end)
+    tabButton.MouseLeave:Connect(function()
+        if self.ActiveTab ~= name then
+            createTween(tabButton, {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}, 0.2):Play()
+        end
+    end)
+    
+    return self.Tabs[name]
+end
+
+-- Add a chapter to a tab
+function CoolUI:AddChapter(tabName, chapterName)
+    local tab = self.Tabs[tabName]
+    if not tab then return end
+    
+    local chapterFrame = Instance.new("Frame")
+    chapterFrame.Size = UDim2.new(1, -10, 0, 100)
+    chapterFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    chapterFrame.BorderSizePixel = 0
+    chapterFrame.Parent = tab.Content
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 6)
+    UICorner.Parent = chapterFrame
+    
+    local chapterLabel = Instance.new("TextLabel")
+    chapterLabel.Size = UDim2.new(1, -10, 0, 20)
+    chapterLabel.Position = UDim2.new(0, 5, 0, 5)
+    chapterLabel.BackgroundTransparency = 1
+    chapterLabel.Text = chapterName
+    chapterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    chapterLabel.TextSize = 14
+    chapterLabel.Font = Enum.Font.SourceSansBold
+    chapterLabel.TextXAlignment = Enum.TextXAlignment.Left
+    chapterLabel.Parent = chapterFrame
+    
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, -10, 1, -30)
+    contentFrame.Position = UDim2.new(0, 5, 0, 25)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Parent = chapterFrame
+    
+    local uiListLayout = Instance.new("UIListLayout")
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    uiListLayout.Padding = UDim.new(0, 5)
+    uiListLayout.Parent = contentFrame
+    
+    tab.Chapters[chapterName] = contentFrame
+    tab.Content.CanvasSize = UDim2.new(0, 0, 0, tab.Content.UIListLayout.AbsoluteContentSize.Y + 10)
+    
+    return contentFrame
+end
+
+-- Add a button to a chapter
+function CoolUI:AddButton(chapterFrame, text, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, 0, 0, 30)
+    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 14
+    button.Font = Enum.Font.SourceSans
+    button.Parent = chapterFrame
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 6)
+    UICorner.Parent = button
+    
+    button.MouseButton1Click:Connect(function()
+        if callback then callback() end
+        createTween(button, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}, 0.1):Play()
+        wait(0.1)
+        createTween(button, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}, 0.1):Play()
+    end)
+    
+    button.MouseEnter:Connect(function()
+        createTween(button, {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}, 0.2):Play()
+    end)
+    button.MouseLeave:Connect(function()
+        createTween(button, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}, 0.2):Play()
+    end)
+    
+    chapterFrame.Parent.CanvasSize = UDim2.new(0, 0, 0, chapterFrame.UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+-- Add a toggle to a chapter
+function CoolUI:AddToggle(chapterFrame, text, default, callback)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(1, 0, 0, 30)
+    toggleFrame.BackgroundTransparency = 1
+    toggleFrame.Parent = chapterFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSans
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleFrame
+    
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Size = UDim2.new(0, 40, 0, 20)
+    toggleButton.Position = UDim2.new(1, -40, 0.5, -10)
+    toggleButton.BackgroundColor3 = default and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(100, 100, 100)
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Text = ""
+    toggleButton.Parent = toggleFrame
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = toggleButton
+    
+    local state = default
+    toggleButton.MouseButton1Click:Connect(function()
+        state = not state
+        createTween(toggleButton, {BackgroundColor3 = state and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(100, 100, 100)}, 0.3):Play()
+        if callback then callback(state) end
+    end)
+    
+    chapterFrame.Parent.CanvasSize = UDim2.new(0, 0, 0, chapterFrame.UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+-- Add a text input to a chapter
+function CoolUI:AddTextInput(chapterFrame, placeholder, callback)
+    local textBox = Instance.new("TextBox")
+    textBox.Size = UDim2.new(1, 0, 0, 30)
+    textBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    textBox.BorderSizePixel = 0
+    textBox.Text = ""
+    textBox.PlaceholderText = placeholder
+    textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    textBox.TextSize = 14
+    textBox.Font = Enum.Font.SourceSans
+    textBox.Parent = chapterFrame
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 6)
+    UICorner.Parent = textBox
+    
+    textBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and callback then
+            callback(textBox.Text)
+        end
+    end)
+    
+    textBox.MouseEnter:Connect(function()
+        createTween(textBox, {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}, 0.2):Play()
+    end)
+    textBox.MouseLeave:Connect(function()
+        createTween(textBox, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}, 0.2):Play()
+    end)
+    
+    chapterFrame.Parent.CanvasSize = UDim2.new(0, 0, 0, chapterFrame.UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+-- Add a slider to a chapter
+function CoolUI:AddSlider(chapterFrame, text, min, max, default, callback)
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Size = UDim2.new(1, 0, 0, 50)
+    sliderFrame.BackgroundTransparency = 1
+    sliderFrame.Parent = chapterFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSans
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = sliderFrame
+    
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Size = UDim2.new(1, 0, 0, 10)
+    sliderBar.Position = UDim2.new(0, 0, 0, 30)
+    sliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    sliderBar.BorderSizePixel = 0
+    sliderBar.Parent = sliderFrame
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 5)
+    UICorner.Parent = sliderBar
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBar
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 5)
+    fillCorner.Parent = fill
+    
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0, 50, 0, 20)
+    valueLabel.Position = UDim2.new(1, -50, 0, 5)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    valueLabel.TextSize = 14
+    valueLabel.Font = Enum.Font.SourceSans
+    valueLabel.Parent = sliderFrame
+    
+    local dragging = false
+    sliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    
+    sliderBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            local mousePos = input.Position.X
+            local barPos = sliderBar.AbsolutePosition.X
+            local barWidth = sliderBar.AbsoluteSize.X
+            local relative = math.clamp((mousePos - barPos) / barWidth, 0, 1)
+            local value = min + (max - min) * relative
+            value = math.floor(value + 0.5)
+            fill.Size = UDim2.new(relative, 0, 1, 0)
+            valueLabel.Text = tostring(value)
+            if callback then callback(value) end
+        end
+    end)
+    
+    chapterFrame.Parent.CanvasSize = UDim2.new(0, 0, 0, chapterFrame.UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+-- Add a menu (alias for creating a new UI instance)
+function CoolUI:AddMenu(title, position, size)
+    return CoolUI.new(title, position, size)
+end
+
+-- Destroy the UI
+function CoolUI:Destroy()
+    self.MainFrame:Destroy()
+    self.ScreenGui:Destroy()
+    setmetatable(self, nil)
+end
+
+return CoolUI

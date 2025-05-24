@@ -1,0 +1,935 @@
+local ModernUILibrary = {}
+ModernUILibrary.__index = ModernUILibrary
+
+-- Services
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Theme configuration
+local Theme = {
+    Primary = Color3.fromRGB(25, 25, 25),
+    Secondary = Color3.fromRGB(35, 35, 35),
+    Accent = Color3.fromRGB(0, 170, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextSecondary = Color3.fromRGB(200, 200, 200),
+    Highlight = Color3.fromRGB(50, 50, 50),
+    Success = Color3.fromRGB(0, 255, 127),
+    Error = Color3.fromRGB(255, 71, 87)
+}
+
+-- Utility functions
+local function Create(instanceType, properties)
+    if not instanceType or type(instanceType) ~= "string" then
+        error("Invalid instance type", 2)
+    end
+    local instance = Instance.new(instanceType)
+    for property, value in pairs(properties or {}) do
+        instance[property] = value
+    end
+    return instance
+end
+
+local function Tween(object, properties, duration, style, direction)
+    if not object then
+        error("Invalid object for tween", 2)
+        return
+    end
+    local tweenInfo = TweenInfo.new(
+        duration or 0.2,
+        style or Enum.EasingStyle.Quad,
+        direction or Enum.EasingDirection.Out
+    )
+    local tween = TweenService:Create(object, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
+local function RippleEffect(button, mousePos)
+    if not button or not button:IsA("GuiObject") then
+        return
+    end
+    
+    local ripple = Create("Frame", {
+        Name = "Ripple",
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.8,
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = button.ZIndex + 1,
+        ClipsDescendants = true
+    })
+    
+    ripple.Parent = button
+    
+    local buttonPos = button.AbsolutePosition
+    local buttonSize = button.AbsoluteSize
+    
+    if mousePos then
+        ripple.Position = UDim2.new(0, mousePos.X - buttonPos.X, 0, mousePos.Y - buttonPos.Y)
+    end
+    
+    local targetSize = math.max(buttonSize.X, buttonSize.Y) * 2
+    local tween = Tween(ripple, {
+        Size = UDim2.new(0, targetSize, 0, targetSize),
+        Position = UDim2.new(0.5, -targetSize/2, 0.5, -targetSize/2),
+        BackgroundTransparency = 1
+    }, 0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+    
+    tween.Completed:Connect(function()
+        ripple:Destroy()
+    end)
+end
+
+-- Main UI creation
+function ModernUILibrary.new(title, parent)
+    local self = setmetatable({}, ModernUILibrary)
+    
+    self.Title = title or "Modern UI"
+    self.Tabs = {}
+    self.CurrentTab = nil
+    self.Visible = false
+    self.Connections = {}
+    
+    -- Main screen gui
+    self.ScreenGui = Create("ScreenGui", {
+        Name = "ModernUILibrary",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        Parent = parent or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    })
+    
+    -- Main frame with scale support
+    self.MainFrame = Create("Frame", {
+        Name = "MainFrame",
+        Size = UDim2.new(0.4, 0, 0.6, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Theme.Primary,
+        ClipsDescendants = true
+    })
+    
+    Create("UIScale", {
+        Parent = self.MainFrame
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.MainFrame
+    })
+    
+    -- Drop shadow
+    Create("ImageLabel", {
+        Name = "Shadow",
+        Size = UDim2.new(1, 10, 1, 10),
+        Position = UDim2.new(0, -5, 0, -5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://1316045217",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.8,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(10, 10, 118, 118),
+        ZIndex = -1,
+        Parent = self.MainFrame
+    })
+    
+    -- Title bar
+    self.TitleBar = Create("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.TitleBar
+    })
+    
+    -- Title text
+    self.TitleText = Create("TextLabel", {
+        Name = "TitleText",
+        Size = UDim2.new(0.7, 0, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = self.Title,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamBold,
+        TextSize = 16,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    })
+    
+    -- Close button
+    self.CloseButton = Create("TextButton", {
+        Name = "CloseButton",
+        Size = UDim2.new(0, 40, 0, 40),
+        Position = UDim2.new(1, -40, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "×",
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 24,
+        ZIndex = 2
+    })
+    
+    -- Tab buttons container
+    self.TabButtons = Create("Frame", {
+        Name = "TabButtons",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundTransparency = 1
+    })
+    
+    Create("UIListLayout", {
+        Name = "TabButtonsLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        FillDirection = Enum.FillDirection.Horizontal,
+        Padding = UDim.new(0, 5),
+        Parent = self.TabButtons
+    })
+    
+    -- Tab container
+    self.TabContainer = Create("Frame", {
+        Name = "TabContainer",
+        Size = UDim2.new(1, -20, 1, -100),
+        Position = UDim2.new(0, 10, 0, 90),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
+    })
+    
+    -- Scrolling frame
+    self.ScrollingFrame = Create("ScrollingFrame", {
+        Name = "ScrollingFrame",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+    })
+    
+    self.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
+    })
+    
+    -- Assemble UI
+    self.UIListLayout.Parent = self.ScrollingFrame
+    self.ScrollingFrame.Parent = self.TabContainer
+    self.TitleText.Parent = self.TitleBar
+    self.CloseButton.Parent = self.TitleBar
+    self.TitleBar.Parent = self.MainFrame
+    self.TabButtons.Parent = self.MainFrame
+    self.TabContainer.Parent = self.MainFrame
+    self.MainFrame.Parent = self.ScreenGui
+    
+    -- Improved drag functionality
+    local dragging, dragStart, startPos
+    local function updateDrag(input)
+        local delta = input.Position - dragStart
+        local newPos = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+        self.MainFrame.Position = newPos
+    end
+    
+    table.insert(self.Connections, self.TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.MainFrame.Position
+        end
+    end))
+    
+    table.insert(self.Connections, self.TitleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+    
+    table.insert(self.Connections, UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateDrag(input)
+        end
+    end))
+    
+    -- Close button functionality
+    table.insert(self.Connections, self.CloseButton.MouseButton1Click:Connect(function()
+        self:Toggle()
+    end))
+    
+    table.insert(self.Connections, self.CloseButton.MouseButton1Down:Connect(function()
+        RippleEffect(self.CloseButton, UserInputService:GetMouseLocation())
+    end))
+    
+    -- Keyboard navigation support
+    table.insert(self.Connections, UserInputService.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.Escape and self.Visible then
+            self:Toggle()
+        end
+    end))
+    
+    return self
+end
+
+function ModernUILibrary:Toggle()
+    self.Visible = not self.Visible
+    self.ScreenGui.Enabled = self.Visible
+    
+    local targetSize = self.Visible and UDim2.new(0.4, 0, 0.6, 0) or UDim2.new(0, 0, 0, 0)
+    Tween(self.MainFrame, {Size = targetSize}, 0.3, Enum.EasingStyle.Back, self.Visible and Enum.EasingDirection.Out or Enum.EasingDirection.In)
+end
+
+function ModernUILibrary:AddTab(name, icon)
+    if not name or type(name) ~= "string" then
+        error("Tab name must be a non-empty string", 2)
+    end
+    
+    local tab = {
+        Name = name,
+        Buttons = {},
+        Visible = false,
+        Connections = {}
+    }
+    
+    tab.Button = Create("TextButton", {
+        Name = name .. "TabButton",
+        Size = UDim2.new(0, 100, 1, 0),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = name,
+        TextColor3 = Theme.TextSecondary,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = tab.Button
+    })
+    
+    tab.Frame = Create("Frame", {
+        Name = name .. "TabFrame",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Visible = false
+    })
+    
+    tab.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 15)
+    })
+    
+    tab.UIListLayout.Parent = tab.Frame
+    tab.Frame.Parent = self.ScrollingFrame
+    tab.Button.Parent = self.TabButtons
+    
+    -- Button effects
+    table.insert(tab.Connections, tab.Button.MouseEnter:Connect(function()
+        if not tab.Visible then
+            Tween(tab.Button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+        end
+    end))
+    
+    table.insert(tab.Connections, tab.Button.MouseLeave:Connect(function()
+        if not tab.Visible then
+            Tween(tab.Button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end
+    end))
+    
+    table.insert(tab.Connections, tab.Button.MouseButton1Down:Connect(function()
+        RippleEffect(tab.Button, UserInputService:GetMouseLocation())
+    end))
+    
+    table.insert(tab.Connections, tab.Button.MouseButton1Click:Connect(function()
+        self:SwitchTab(tab)
+    end))
+    
+    if #self.Tabs == 0 then
+        self:SwitchTab(tab)
+    end
+    
+    table.insert(self.Tabs, tab)
+    
+    -- Update tab buttons layout
+    RunService.Heartbeat:Wait()
+    self.ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, self.UIListLayout.AbsoluteContentSize.Y + 20)
+    
+    return tab
+end
+
+function ModernUILibrary:SwitchTab(tab)
+    if not tab then
+        error("Invalid tab", 2)
+        return
+    end
+    
+    for _, otherTab in pairs(self.Tabs) do
+        otherTab.Visible = false
+        otherTab.Frame.Visible = false
+        Tween(otherTab.Button, {
+            BackgroundColor3 = Theme.Secondary,
+            TextColor3 = Theme.TextSecondary
+        }, 0.2)
+    end
+    
+    tab.Visible = true
+    tab.Frame.Visible = true
+    Tween(tab.Button, {
+        BackgroundColor3 = Theme.Accent,
+        TextColor3 = Theme.Text
+    }, 0.2)
+    
+    self.CurrentTab = tab
+    
+    -- Update canvas size
+    RunService.Heartbeat:Wait()
+    self.ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, tab.UIListLayout.AbsoluteContentSize.Y + 20)
+end
+
+function ModernUILibrary:AddChapter(tab, title)
+    if not tab or not title then
+        error("Invalid tab or title", 2)
+    end
+    
+    local chapter = {
+        Title = title,
+        Connections = {}
+    }
+    
+    chapter.Frame = Create("Frame", {
+        Name = title .. "Chapter",
+        Size = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1,
+        LayoutOrder = #tab.Frame:GetChildren()
+    })
+    
+    chapter.TitleLabel = Create("TextLabel", {
+        Name = "TitleLabel",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundTransparency = 1,
+        Text = " " .. string.upper(title),
+        TextColor3 = Theme.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14
+    })
+    
+    chapter.Divider = Create("Frame", {
+        Name = "Divider",
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 0, 25),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    chapter.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
+    })
+    
+    chapter.TitleLabel.Parent = chapter.Frame
+    chapter.Divider.Parent = chapter.Frame
+    chapter.UIListLayout.Parent = chapter.Frame
+    chapter.Frame.Parent = tab.Frame
+    
+    -- Update sizes
+    table.insert(chapter.Connections, chapter.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+        self.ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, tab.UIListLayout.AbsoluteContentSize.Y + 20)
+    end))
+    
+    return chapter
+end
+
+function ModernUILibrary:AddButton(chapter, text, callback)
+    if not chapter or not text then
+        error("Invalid chapter or text", 2)
+    end
+    
+    local button = Create("TextButton", {
+        Name = text .. "Button",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = text,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = button
+    })
+    
+    local connections = {}
+    table.insert(connections, button.MouseEnter:Connect(function()
+        Tween(button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+    end))
+    
+    table.insert(connections, button.MouseLeave:Connect(function()
+        Tween(button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+    end))
+    
+    table.insert(connections, button.MouseButton1Down:Connect(function()
+        RippleEffect(button, UserInputService:GetMouseLocation())
+    end))
+    
+    table.insert(connections, button.MouseButton1Click:Connect(function()
+        if callback then
+            callback()
+        end
+    end))
+    
+    button.Parent = chapter.Frame
+    
+    return {Button = button, Connections = connections}
+end
+
+function ModernUILibrary:AddToggle(chapter, text, default, callback)
+    if not chapter or not text then
+        error("Invalid chapter or text", 2)
+    end
+    
+    local toggle = {
+        Value = default or false,
+        Connections = {}
+    }
+    
+    toggle.Frame = Create("Frame", {
+        Name = text .. "Toggle",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    toggle.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(0.7, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    toggle.Background = Create("Frame", {
+        Name = "Background",
+        Size = UDim2.new(0, 50, 0, 25),
+        Position = UDim2.new(1, -50, 0.5, -12.5),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = toggle.Background
+    })
+    
+    toggle.Button = Create("Frame", {
+        Name = "Button",
+        Size = UDim2.new(0, 21, 0, 21),
+        Position = UDim2.new(0, 2, 0.5, -10.5),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Theme.Text
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = toggle.Button
+    })
+    
+    toggle.Label.Parent = toggle.Frame
+    toggle.Background.Parent = toggle.Frame
+    toggle.Button.Parent = toggle.Background
+    toggle.Frame.Parent = chapter.Frame
+    
+    local function updateToggle()
+        local targetPos = toggle.Value and UDim2.new(1, -23, 0.5, -10.5) or UDim2.new(0, 2, 0.5, -10.5)
+        local targetColor = toggle.Value and Theme.Accent or Theme.Text
+        local bgColor = toggle.Value and Color3.fromRGB(0, 170, 255, 0.3) or Theme.Secondary
+        
+        Tween(toggle.Button, {Position = targetPos, BackgroundColor3 = targetColor}, 0.2)
+        Tween(toggle.Background, {BackgroundColor3 = bgColor}, 0.2)
+    end
+    
+    updateToggle()
+    
+    table.insert(toggle.Connections, toggle.Background.MouseButton1Click:Connect(function()
+        toggle.Value = not toggle.Value
+        updateToggle()
+        if callback then
+            callback(toggle.Value)
+        end
+    end))
+    
+    return toggle
+end
+
+function ModernUILibrary:AddTextInput(chapter, placeholder, default, callback)
+    if not chapter or not placeholder then
+        error("Invalid chapter or placeholder", 2)
+    end
+    
+    local input = {Connections = {}}
+    
+    input.Frame = Create("Frame", {
+        Name = placeholder .. "Input",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    input.Background = Create("Frame", {
+        Name = "Background",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = input.Background
+    })
+    
+    input.TextBox = Create("TextBox", {
+        Name = "TextBox",
+        Size = UDim2.new(1, -20, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = default or "",
+        PlaceholderText = placeholder,
+        TextColor3 = Theme.Text,
+        PlaceholderColor3 = Theme.TextSecondary,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false
+    })
+    
+    table.insert(input.Connections, input.TextBox.Focused:Connect(function()
+        Tween(input.Background, {BackgroundColor3 = Theme.Highlight}, 0.2)
+    end))
+    
+    table.insert(input.Connections, input.TextBox.FocusLost:Connect(function()
+        Tween(input.Background, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        if callback then
+            callback(input.TextBox.Text)
+        end
+    end))
+    
+    input.Background.Parent = input.Frame
+    input.TextBox.Parent = input.Background
+    input.Frame.Parent = chapter.Frame
+    
+    return input
+end
+
+function ModernUILibrary:AddSlider(chapter, text, min, max, default, callback)
+    if not chapter or not text or not min or not max then
+        error("Invalid slider parameters", 2)
+    end
+    
+    local slider = {
+        Min = min,
+        Max = max,
+        Value = math.clamp(default or min, min, max),
+        Connections = {}
+    }
+    
+    slider.Frame = Create("Frame", {
+        Name = text .. "Slider",
+        Size = UDim2.new(1, 0, 0, 60),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    slider.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    slider.ValueLabel = Create("TextLabel", {
+        Name = "ValueLabel",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundTransparency = 1,
+        Text = tostring(slider.Value),
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    slider.Track = Create("Frame", {
+        Name = "Track",
+        Size = UDim2.new(1, 0, 0, 5),
+        Position = UDim2.new(0, 0, 0, 30),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Track
+    })
+    
+    slider.Fill = Create("Frame", {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Theme.Accent
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Fill
+    })
+    
+    slider.Thumb = Create("Frame", {
+        Name = "Thumb",
+        Size = UDim2.new(0, 15, 0, 15),
+        Position = UDim2.new(0, 0, 0.5, -7.5),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Theme.Text,
+        ZIndex = 2
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Thumb
+    })
+    
+    local function updateSliderVisual()
+        local percent = (slider.Value - slider.Min) / (slider.Max - slider.Min)
+        local trackSize = slider.Track.AbsoluteSize.X
+        local fillWidth = percent * trackSize
+        slider.Fill.Size = UDim2.new(0, fillWidth, 1, 0)
+        slider.Thumb.Position = UDim2.new(0, fillWidth, 0.5, -7.5)
+        slider.ValueLabel.Text = tostring(slider.Value)
+    end
+    
+    updateSliderVisual()
+    
+    local dragging = false
+    local function updateSlider(input)
+        local trackAbsolutePos = slider.Track.AbsolutePosition.X
+        local trackAbsoluteSize = slider.Track.AbsoluteSize.X
+        local mouseX = input.Position.X
+        local relativeX = math.clamp(mouseX - trackAbsolutePos, 0, trackAbsoluteSize)
+        local percent = relativeX / trackAbsoluteSize
+        local value = math.floor(slider.Min + (slider.Max - slider.Min) * percent)
+        
+        if value ~= slider.Value then
+            slider.Value = value
+            updateSliderVisual()
+            if callback then
+                callback(slider.Value)
+            end
+        end
+    end
+    
+    table.insert(slider.Connections, slider.Track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(input)
+        end
+    end))
+    
+    table.insert(slider.Connections, slider.Track.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end))
+    
+    table.insert(slider.Connections, UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end))
+    
+    slider.Fill.Parent = slider.Track
+    slider.Thumb.Parent = slider.Track
+    slider.Label.Parent = slider.Frame
+    slider.ValueLabel.Parent = slider.Frame
+    slider.Track.Parent = slider.Frame
+    slider.Frame.Parent = chapter.Frame
+    
+    return slider
+end
+
+function ModernUILibrary:AddDropdown(chapter, text, options, default, callback)
+    if not chapter or not text or not options or type(options) ~= "table" then
+        error("Invalid dropdown parameters", 2)
+    end
+    
+    local dropdown = {
+        Options = options,
+        Value = default or options[1],
+        Open = false,
+        Connections = {}
+    }
+    
+    dropdown.Frame = Create("Frame", {
+        Name = text .. "Dropdown",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    dropdown.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    dropdown.Button = Create("TextButton", {
+        Name = "Button",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 20),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = dropdown.Value or "Select an option",
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = dropdown.Button
+    })
+    
+    dropdown.Arrow = Create("ImageLabel", {
+        Name = "Arrow",
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -25, 0.5, -10),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://3926305904",
+        ImageRectOffset = Vector2.new(964, 324),
+        ImageRectSize = Vector2.new(36, 36),
+        ImageColor3 = Theme.Text
+    })
+    
+    dropdown.OptionsFrame = Create("Frame", {
+        Name = "OptionsFrame",
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 65),
+        BackgroundColor3 = Theme.Secondary,
+        ClipsDescendants = true,
+        Visible = false
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = dropdown.OptionsFrame
+    })
+    
+    dropdown.OptionsListLayout = Create("UIListLayout", {
+        Name = "OptionsListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder
+    })
+    
+    for i, option in ipairs(dropdown.Options) do
+        local optionButton = Create("TextButton", {
+            Name = option .. "Option",
+            Size = UDim2.new(1, 0, 0, 35),
+            BackgroundColor3 = Theme.Secondary,
+            AutoButtonColor = false,
+            Text = " " .. option,
+            TextColor3 = Theme.Text,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = i
+        })
+        
+        table.insert(dropdown.Connections, optionButton.MouseEnter:Connect(function()
+            Tween(optionButton, {BackgroundColor3 = Theme.Highlight}, 0.2)
+        end))
+        
+        table.insert(dropdown.Connections, optionButton.MouseLeave:Connect(function()
+            Tween(optionButton, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end))
+        
+        table.insert(dropdown.Connections, optionButton.MouseButton1Click:Connect(function()
+            dropdown.Value = option
+            dropdown.Button.Text = option
+            if callback then
+                callback(option)
+            end
+            dropdown:Toggle()
+        end))
+        
+        optionButton.Parent = dropdown.OptionsFrame
+    end
+    
+    function dropdown:Toggle()
+        self.Open = not self.Open
+        self.OptionsFrame.Visible = self.Open
+        local targetSize = self.Open and UDim2.new(1, 0, 0, math.min(#self.Options * 35, 175)) or UDim2.new(1, 0, 0, 0)
+        Tween(self.Arrow, {Rotation = self.Open and 180 or 0}, 0.2)
+        Tween(self.OptionsFrame, {Size = targetSize}, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    end
+    
+    table.insert(dropdown.Connections, dropdown.Button.MouseEnter:Connect(function()
+        Tween(dropdown.Button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+    end))
+    
+    table.insert(dropdown.Connections, dropdown.Button.MouseLeave:Connect(function()
+        if not dropdown.Open then
+            Tween(dropdown.Button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end
+    end))
+    
+    table.insert(dropdown.Connections, dropdown.Button.MouseButton1Click:Connect(function()
+        dropdown:Toggle()
+    end))
+    
+    dropdown.Arrow.Parent = dropdown.Button
+    dropdown.Label.Parent = dropdown.Frame
+    dropdown.Button.Parent = dropdown.Frame
+    dropdown.OptionsListLayout.Parent = dropdown.OptionsFrame
+    dropdown.OptionsFrame.Parent = dropdown.Frame
+    dropdown.Frame.Parent = chapter.Frame
+    
+    return dropdown
+end
+
+function ModernUILibrary:Destroy()
+    for _, connection in ipairs(self.Connections) do
+        connection:Disconnect()
+    end
+    for _, tab in ipairs(self.Tabs) do
+        for _, connection in ipairs(tab.Connections or {}) do
+            connection:Disconnect()
+        end
+    end
+    if self.ScreenGui then
+        self.ScreenGui:Destroy()
+    end
+    setmetatable(self, nil)
+end
+
+return ModernUILibrary

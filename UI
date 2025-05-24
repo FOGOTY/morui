@@ -1,0 +1,991 @@
+-- Modern UI Library
+local ModernUILibrary = {}
+ModernUILibrary.__index = ModernUILibrary
+
+-- Animation service
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Library theme
+local Theme = {
+    Primary = Color3.fromRGB(25, 25, 25),
+    Secondary = Color3.fromRGB(35, 35, 35),
+    Accent = Color3.fromRGB(0, 170, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextSecondary = Color3.fromRGB(200, 200, 200),
+    Highlight = Color3.fromRGB(50, 50, 50),
+    Success = Color3.fromRGB(0, 255, 127),
+    Error = Color3.fromRGB(255, 71, 87)
+}
+
+-- Utility functions
+local function Create(instanceType, properties)
+    local instance = Instance.new(instanceType)
+    for property, value in pairs(properties) do
+        instance[property] = value
+    end
+    return instance
+end
+
+local function Tween(object, properties, duration, style, direction)
+    local tweenInfo = TweenInfo.new(duration or 0.2, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
+    local tween = TweenService:Create(object, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
+local function RippleEffect(button)
+    local ripple = Create("Frame", {
+        Name = "Ripple",
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.8,
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 10
+    })
+    
+    ripple.Parent = button
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local buttonPos = button.AbsolutePosition
+    local buttonSize = button.AbsoluteSize
+    
+    ripple.Position = UDim2.new(0, mousePos.X - buttonPos.X, 0, mousePos.Y - buttonPos.Y)
+    
+    local targetSize = math.max(buttonSize.X, buttonSize.Y) * 2.5
+    
+    Tween(ripple, {
+        Size = UDim2.new(0, targetSize, 0, targetSize),
+        Position = UDim2.new(0.5, -targetSize/2, 0.5, -targetSize/2),
+        BackgroundTransparency = 1
+    }, 0.5)
+    
+    spawn(function()
+        wait(0.5)
+        ripple:Destroy()
+    end)
+end
+
+-- Main UI creation
+function ModernUILibrary.new(title)
+    local self = setmetatable({}, ModernUILibrary)
+    
+    self.Title = title or "Modern UI"
+    self.Tabs = {}
+    self.CurrentTab = nil
+    self.Visible = false
+    
+    -- Main screen gui
+    self.ScreenGui = Create("ScreenGui", {
+        Name = "ModernUILibrary",
+        ResetOnSpawn = false
+    })
+    
+    -- Main frame
+    self.MainFrame = Create("Frame", {
+        Name = "MainFrame",
+        Size = UDim2.new(0, 450, 0, 500),
+        Position = UDim2.new(0.5, -225, 0.5, -250),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Theme.Primary,
+        ClipsDescendants = true
+    })
+    
+    -- Corner rounding
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.MainFrame
+    })
+    
+    -- Drop shadow
+    local shadow = Create("ImageLabel", {
+        Name = "Shadow",
+        Size = UDim2.new(1, 10, 1, 10),
+        Position = UDim2.new(0, -5, 0, -5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://1316045217",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.8,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(10, 10, 118, 118),
+        ZIndex = -1
+    })
+    shadow.Parent = self.MainFrame
+    
+    -- Title bar
+    self.TitleBar = Create("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = self.TitleBar
+    })
+    
+    -- Title text
+    self.TitleText = Create("TextLabel", {
+        Name = "TitleText",
+        Size = UDim2.new(0, 200, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = self.Title,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamBold,
+        TextSize = 16
+    })
+    
+    -- Close button
+    self.CloseButton = Create("TextButton", {
+        Name = "CloseButton",
+        Size = UDim2.new(0, 40, 0, 40),
+        Position = UDim2.new(1, -40, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "×",
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 24,
+        ZIndex = 2
+    })
+    
+    -- Tab buttons container
+    self.TabButtons = Create("Frame", {
+        Name = "TabButtons",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
+    })
+    
+    -- Tab container
+    self.TabContainer = Create("Frame", {
+        Name = "TabContainer",
+        Size = UDim2.new(1, -20, 1, -100),
+        Position = UDim2.new(0, 10, 0, 90),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true
+    })
+    
+    -- Scrolling frame for tabs
+    self.ScrollingFrame = Create("ScrollingFrame", {
+        Name = "ScrollingFrame",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+    })
+    
+    -- UI list layout for tab content
+    self.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
+    })
+    
+    -- Assemble UI
+    self.UIListLayout.Parent = self.ScrollingFrame
+    self.ScrollingFrame.Parent = self.TabContainer
+    self.TitleText.Parent = self.TitleBar
+    self.CloseButton.Parent = self.TitleBar
+    self.TitleBar.Parent = self.MainFrame
+    self.TabButtons.Parent = self.MainFrame
+    self.TabContainer.Parent = self.MainFrame
+    self.MainFrame.Parent = self.ScreenGui
+    
+    -- Make window draggable
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        self.MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    self.TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = self.MainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    self.TitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+    
+    -- Close button functionality
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:Toggle()
+    end)
+    
+    -- Ripple effect for close button
+    self.CloseButton.MouseButton1Down:Connect(function()
+        RippleEffect(self.CloseButton)
+    end)
+    
+    return self
+end
+
+-- Toggle UI visibility
+function ModernUILibrary:Toggle()
+    self.Visible = not self.Visible
+    self.ScreenGui.Enabled = self.Visible
+    
+    if self.Visible then
+        self.MainFrame.Size = UDim2.new(0, 0, 0, 0)
+        Tween(self.MainFrame, {
+            Size = UDim2.new(0, 450, 0, 500)
+        }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    else
+        Tween(self.MainFrame, {
+            Size = UDim2.new(0, 0, 0, 0)
+        }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    end
+end
+
+-- Add a menu (alias for new)
+function ModernUILibrary:AddMenu(title)
+    return ModernUILibrary.new(title)
+end
+
+-- Add a tab
+function ModernUILibrary:AddTab(name, icon)
+    local tab = {}
+    tab.Name = name or "Tab"
+    tab.Buttons = {}
+    tab.Visible = false
+    
+    -- Tab button
+    tab.Button = Create("TextButton", {
+        Name = name .. "TabButton",
+        Size = UDim2.new(0, 100, 1, 0),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = name,
+        TextColor3 = Theme.TextSecondary,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = tab.Button
+    })
+    
+    -- Tab content frame
+    tab.Frame = Create("Frame", {
+        Name = name .. "TabFrame",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Visible = false
+    })
+    
+    -- UI list layout for tab content
+    tab.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 15)
+    })
+    
+    tab.UIListLayout.Parent = tab.Frame
+    tab.Frame.Parent = self.ScrollingFrame
+    
+    -- Add to tab buttons container
+    if #self.Tabs > 0 then
+        tab.Button.Position = UDim2.new(0, (#self.Tabs * 105), 0, 0)
+    else
+        tab.Button.Position = UDim2.new(0, 5, 0, 0)
+    end
+    
+    tab.Button.Parent = self.TabButtons
+    
+    -- Button effects
+    tab.Button.MouseEnter:Connect(function()
+        if not tab.Visible then
+            Tween(tab.Button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+        end
+    end)
+    
+    tab.Button.MouseLeave:Connect(function()
+        if not tab.Visible then
+            Tween(tab.Button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end
+    end)
+    
+    tab.Button.MouseButton1Down:Connect(function()
+        RippleEffect(tab.Button)
+    end)
+    
+    -- Tab switching
+    tab.Button.MouseButton1Click:Connect(function()
+        self:SwitchTab(tab)
+    end)
+    
+    -- Set as current tab if first tab
+    if #self.Tabs == 0 then
+        self:SwitchTab(tab)
+    end
+    
+    table.insert(self.Tabs, tab)
+    return tab
+end
+
+-- Switch tabs
+function ModernUILibrary:SwitchTab(tab)
+    for _, otherTab in pairs(self.Tabs) do
+        otherTab.Visible = false
+        otherTab.Frame.Visible = false
+        Tween(otherTab.Button, {
+            BackgroundColor3 = Theme.Secondary,
+            TextColor3 = Theme.TextSecondary
+        }, 0.2)
+    end
+    
+    tab.Visible = true
+    tab.Frame.Visible = true
+    Tween(tab.Button, {
+        BackgroundColor3 = Theme.Accent,
+        TextColor3 = Theme.Text
+    }, 0.2)
+    
+    self.CurrentTab = tab
+end
+
+-- Add a chapter (section)
+function ModernUILibrary:AddChapter(tab, title)
+    local chapter = {}
+    chapter.Title = title or "Section"
+    
+    -- Chapter frame
+    chapter.Frame = Create("Frame", {
+        Name = title .. "Chapter",
+        Size = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1,
+        LayoutOrder = #tab.Frame:GetChildren()
+    })
+    
+    -- Chapter title
+    chapter.TitleLabel = Create("TextLabel", {
+        Name = "TitleLabel",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundTransparency = 1,
+        Text = " " .. string.upper(title),
+        TextColor3 = Theme.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14
+    })
+    
+    -- Divider line
+    chapter.Divider = Create("Frame", {
+        Name = "Divider",
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 0, 25),
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0
+    })
+    
+    -- UI list layout for chapter content
+    chapter.UIListLayout = Create("UIListLayout", {
+        Name = "UIListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
+    })
+    
+    -- Assemble chapter
+    chapter.TitleLabel.Parent = chapter.Frame
+    chapter.Divider.Parent = chapter.Frame
+    chapter.UIListLayout.Parent = chapter.Frame
+    chapter.Frame.Parent = tab.Frame
+    
+    -- Update canvas size
+    spawn(function()
+        wait()
+        tab.UIListLayout:ApplyLayout()
+        self.ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, tab.UIListLayout.AbsoluteContentSize.Y + 20)
+    end)
+    
+    return chapter
+end
+
+-- Add a button
+function ModernUILibrary:AddButton(chapter, text, callback)
+    local button = Create("TextButton", {
+        Name = text .. "Button",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = text,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = button
+    })
+    
+    -- Button effects
+    button.MouseEnter:Connect(function()
+        Tween(button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        Tween(button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+    end)
+    
+    button.MouseButton1Down:Connect(function()
+        RippleEffect(button)
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        if callback then
+            callback()
+        end
+    end)
+    
+    button.Parent = chapter.Frame
+    
+    -- Update chapter size
+    spawn(function()
+        wait()
+        chapter.UIListLayout:ApplyLayout()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return button
+end
+
+-- Add a toggle
+function ModernUILibrary:AddToggle(chapter, text, default, callback)
+    local toggle = {}
+    toggle.Value = default or false
+    
+    -- Toggle frame
+    toggle.Frame = Create("Frame", {
+        Name = text .. "Toggle",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    -- Toggle label
+    toggle.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(0.7, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    -- Toggle background
+    toggle.Background = Create("Frame", {
+        Name = "Background",
+        Size = UDim2.new(0, 50, 0, 25),
+        Position = UDim2.new(1, -50, 0.5, -12.5),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = toggle.Background
+    })
+    
+    -- Toggle button
+    toggle.Button = Create("Frame", {
+        Name = "Button",
+        Size = UDim2.new(0, 21, 0, 21),
+        Position = UDim2.new(0, 2, 0.5, -10.5),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Theme.Text
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = toggle.Button
+    })
+    
+    -- Assemble toggle
+    toggle.Label.Parent = toggle.Frame
+    toggle.Background.Parent = toggle.Frame
+    toggle.Button.Parent = toggle.Background
+    toggle.Frame.Parent = chapter.Frame
+    
+    -- Set initial state
+    if toggle.Value then
+        Tween(toggle.Button, {
+            Position = UDim2.new(1, -23, 0.5, -10.5),
+            BackgroundColor3 = Theme.Accent
+        }, 0.1)
+        Tween(toggle.Background, {
+            BackgroundColor3 = Color3.fromRGB(0, 170, 255, 0.3)
+        }, 0.1)
+    else
+        Tween(toggle.Button, {
+            Position = UDim2.new(0, 2, 0.5, -10.5),
+            BackgroundColor3 = Theme.Text
+        }, 0.1)
+        Tween(toggle.Background, {
+            BackgroundColor3 = Theme.Secondary
+        }, 0.1)
+    end
+    
+    -- Toggle functionality
+    toggle.Background.MouseButton1Click:Connect(function()
+        toggle.Value = not toggle.Value
+        
+        if toggle.Value then
+            Tween(toggle.Button, {
+                Position = UDim2.new(1, -23, 0.5, -10.5),
+                BackgroundColor3 = Theme.Accent
+            }, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            Tween(toggle.Background, {
+                BackgroundColor3 = Color3.fromRGB(0, 170, 255, 0.3)
+            }, 0.2)
+        else
+            Tween(toggle.Button, {
+                Position = UDim2.new(0, 2, 0.5, -10.5),
+                BackgroundColor3 = Theme.Text
+            }, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            Tween(toggle.Background, {
+                BackgroundColor3 = Theme.Secondary
+            }, 0.2)
+        end
+        
+        if callback then
+            callback(toggle.Value)
+        end
+    end)
+    
+    -- Update chapter size
+    spawn(function()
+        wait()
+        chapter.UIListLayout:ApplyLayout()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return toggle
+end
+
+-- Add a text input
+function ModernUILibrary:AddTextInput(chapter, placeholder, default, callback)
+    local input = {}
+    
+    -- Input frame
+    input.Frame = Create("Frame", {
+        Name = placeholder .. "Input",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    -- Text box background
+    input.Background = Create("Frame", {
+        Name = "Background",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = input.Background
+    })
+    
+    -- Actual text box
+    input.TextBox = Create("TextBox", {
+        Name = "TextBox",
+        Size = UDim2.new(1, -20, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = default or "",
+        PlaceholderText = placeholder or "Enter text...",
+        TextColor3 = Theme.Text,
+        PlaceholderColor3 = Theme.TextSecondary,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false
+    })
+    
+    -- Focus effect
+    input.TextBox.Focused:Connect(function()
+        Tween(input.Background, {
+            BackgroundColor3 = Theme.Highlight
+        }, 0.2)
+    end)
+    
+    input.TextBox.FocusLost:Connect(function()
+        Tween(input.Background, {
+            BackgroundColor3 = Theme.Secondary
+        }, 0.2)
+        
+        if callback then
+            callback(input.TextBox.Text)
+        end
+    end)
+    
+    -- Assemble input
+    input.Background.Parent = input.Frame
+    input.TextBox.Parent = input.Background
+    input.Frame.Parent = chapter.Frame
+    
+    -- Update chapter size
+    spawn(function()
+        wait()
+        chapter.UIListLayout:ApplyLayout()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return input
+end
+
+-- Add a slider
+function ModernUILibrary:AddSlider(chapter, text, min, max, default, callback)
+    local slider = {}
+    slider.Min = min or 0
+    slider.Max = max or 100
+    slider.Value = default or min
+    
+    -- Slider frame
+    slider.Frame = Create("Frame", {
+        Name = text .. "Slider",
+        Size = UDim2.new(1, 0, 0, 60),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    -- Slider label
+    slider.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    -- Slider value label
+    slider.ValueLabel = Create("TextLabel", {
+        Name = "ValueLabel",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundTransparency = 1,
+        Text = tostring(slider.Value),
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    -- Slider track
+    slider.Track = Create("Frame", {
+        Name = "Track",
+        Size = UDim2.new(1, 0, 0, 5),
+        Position = UDim2.new(0, 0, 0, 30),
+        BackgroundColor3 = Theme.Secondary
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Track
+    })
+    
+    -- Slider fill
+    slider.Fill = Create("Frame", {
+        Name = "Fill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Theme.Accent
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Fill
+    })
+    
+    -- Slider thumb
+    slider.Thumb = Create("Frame", {
+        Name = "Thumb",
+        Size = UDim2.new(0, 15, 0, 15),
+        Position = UDim2.new(0, 0, 0.5, -7.5),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = Theme.Text,
+        ZIndex = 2
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = slider.Thumb
+    })
+    
+    -- Calculate initial position
+    local initialFillWidth = ((slider.Value - slider.Min) / (slider.Max - slider.Min)) * slider.Track.AbsoluteSize.X
+    slider.Fill.Size = UDim2.new(0, initialFillWidth, 1, 0)
+    slider.Thumb.Position = UDim2.new(0, initialFillWidth, 0.5, -7.5)
+    
+    -- Assemble slider
+    slider.Fill.Parent = slider.Track
+    slider.Thumb.Parent = slider.Track
+    slider.Label.Parent = slider.Frame
+    slider.ValueLabel.Parent = slider.Frame
+    slider.Track.Parent = slider.Frame
+    slider.Frame.Parent = chapter.Frame
+    
+    -- Slider functionality
+    local dragging = false
+    
+    local function updateSlider(input)
+        local trackAbsolutePos = slider.Track.AbsolutePosition.X
+        local trackAbsoluteSize = slider.Track.AbsoluteSize.X
+        local mouseX = input.Position.X
+        
+        -- Clamp mouse position to track bounds
+        local relativeX = math.clamp(mouseX - trackAbsolutePos, 0, trackAbsoluteSize)
+        local percent = relativeX / trackAbsoluteSize
+        local value = math.floor(slider.Min + (slider.Max - slider.Min) * percent)
+        
+        -- Only update if value changed
+        if value ~= slider.Value then
+            slider.Value = value
+            slider.ValueLabel.Text = tostring(slider.Value)
+            
+            -- Update visual
+            slider.Fill.Size = UDim2.new(0, relativeX, 1, 0)
+            slider.Thumb.Position = UDim2.new(0, relativeX, 0.5, -7.5)
+            
+            if callback then
+                callback(slider.Value)
+            end
+        end
+    end
+    
+    slider.Track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(input)
+        end
+    end)
+    
+    slider.Track.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+    
+    -- Update chapter size
+    spawn(function()
+        wait()
+        chapter.UIListLayout:ApplyLayout()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return slider
+end
+
+-- Add a dropdown
+function ModernUILibrary:AddDropdown(chapter, text, options, default, callback)
+    local dropdown = {}
+    dropdown.Options = options or {}
+    dropdown.Value = default or (options and options[1]) or nil
+    dropdown.Open = false
+    
+    -- Dropdown frame
+    dropdown.Frame = Create("Frame", {
+        Name = text .. "Dropdown",
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        LayoutOrder = #chapter.Frame:GetChildren()
+    })
+    
+    -- Dropdown label
+    dropdown.Label = Create("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        TextSize = 14
+    })
+    
+    -- Dropdown button
+    dropdown.Button = Create("TextButton", {
+        Name = "Button",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 20),
+        BackgroundColor3 = Theme.Secondary,
+        AutoButtonColor = false,
+        Text = dropdown.Value or "Select an option",
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = dropdown.Button
+    })
+    
+    -- Dropdown arrow
+    dropdown.Arrow = Create("ImageLabel", {
+        Name = "Arrow",
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -25, 0.5, -10),
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://3926305904",
+        ImageRectOffset = Vector2.new(964, 324),
+        ImageRectSize = Vector2.new(36, 36),
+        ImageColor3 = Theme.Text,
+        Rotation = 0
+    })
+    
+    -- Dropdown options frame
+    dropdown.OptionsFrame = Create("Frame", {
+        Name = "OptionsFrame",
+        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 65),
+        BackgroundColor3 = Theme.Secondary,
+        ClipsDescendants = true,
+        Visible = false
+    })
+    
+    Create("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = dropdown.OptionsFrame
+    })
+    
+    -- Options list layout
+    dropdown.OptionsListLayout = Create("UIListLayout", {
+        Name = "OptionsListLayout",
+        SortOrder = Enum.SortOrder.LayoutOrder
+    })
+    
+    -- Create option buttons
+    for i, option in ipairs(dropdown.Options) do
+        local optionButton = Create("TextButton", {
+            Name = option .. "Option",
+            Size = UDim2.new(1, 0, 0, 35),
+            BackgroundColor3 = Theme.Secondary,
+            AutoButtonColor = false,
+            Text = " " .. option,
+            TextColor3 = Theme.Text,
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = i
+        })
+        
+        optionButton.MouseEnter:Connect(function()
+            Tween(optionButton, {BackgroundColor3 = Theme.Highlight}, 0.2)
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            Tween(optionButton, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end)
+        
+        optionButton.MouseButton1Click:Connect(function()
+            dropdown.Value = option
+            dropdown.Button.Text = option
+            if callback then
+                callback(option)
+            end
+            dropdown:Toggle()
+        end)
+        
+        optionButton.Parent = dropdown.OptionsFrame
+    end
+    
+    -- Toggle dropdown function
+    function dropdown:Toggle()
+        self.Open = not self.Open
+        
+        if self.Open then
+            self.OptionsFrame.Visible = true
+            Tween(self.Arrow, {Rotation = 180}, 0.2)
+            Tween(self.OptionsFrame, {
+                Size = UDim2.new(1, 0, 0, math.min(#self.Options * 35, 175))
+            }, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        else
+            Tween(self.Arrow, {Rotation = 0}, 0.2)
+            Tween(self.OptionsFrame, {
+                Size = UDim2.new(1, 0, 0, 0)
+            }, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, function()
+                self.OptionsFrame.Visible = false
+            end)
+        end
+    end
+    
+    -- Button effects
+    dropdown.Button.MouseEnter:Connect(function()
+        Tween(dropdown.Button, {BackgroundColor3 = Theme.Highlight}, 0.2)
+    end)
+    
+    dropdown.Button.MouseLeave:Connect(function()
+        if not dropdown.Open then
+            Tween(dropdown.Button, {BackgroundColor3 = Theme.Secondary}, 0.2)
+        end
+    end)
+    
+    dropdown.Button.MouseButton1Click:Connect(function()
+        dropdown:Toggle()
+    end)
+    
+    -- Assemble dropdown
+    dropdown.Arrow.Parent = dropdown.Button
+    dropdown.Label.Parent = dropdown.Frame
+    dropdown.Button.Parent = dropdown.Frame
+    dropdown.OptionsListLayout.Parent = dropdown.OptionsFrame
+    dropdown.OptionsFrame.Parent = dropdown.Frame
+    dropdown.Frame.Parent = chapter.Frame
+    
+    -- Update chapter size
+    spawn(function()
+        wait()
+        chapter.UIListLayout:ApplyLayout()
+        chapter.Frame.Size = UDim2.new(1, 0, 0, chapter.UIListLayout.AbsoluteContentSize.Y)
+    end)
+    
+    return dropdown
+end
+
+return ModernUILibrary
